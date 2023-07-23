@@ -1,4 +1,5 @@
 [core]
     remote = myremote
 ['remote "myremote"']
-    url = s3://dvc-public/remote/cml_example
+    url = gdrive://1dyCZGQc88fOC22zZ0PDAkQWbNhAFxzla
+    gdrive_acknowledge_abuse = true
