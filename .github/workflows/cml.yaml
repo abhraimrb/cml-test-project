@@ -4,6 +4,9 @@ jobs:
   train-and-report:
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/setup-node@v1
+        with:
+          node-version: '16'   
       - uses: actions/checkout@v3
         with:
           ref: ${{ github.event.pull_request.head.sha }}
@@ -12,11 +15,11 @@ jobs:
           python-version: '3.x'
       - uses: iterative/setup-cml@v1
       - uses: iterative/setup-dvc@v1
+        with:
+          version: '2.58.2'
       - name: Train model
         env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
+          GDRIVE_CREDENTIALS_DATA: ${{ secrets.GDRIVE_CREDENTIALS_DATA }}
         run: |
           dvc pull data
           pip install -r requirements.txt
@@ -24,13 +27,18 @@ jobs:
       - name: Create CML report
         run: |
           # Compare metrics to main
-          test $(git branch --show-current) == main || git fetch --depth=1 origin main:main 
-          dvc metrics diff --show-md main >> report.md
-          # Visualize loss function diff
-          dvc plots diff \
-            --target loss.csv --show-vega main > vega.json
-          vl2png vega.json > plot.png
-          echo '![](./plot.png "Training Loss")' >> report.md
+          #test $(git branch --show-current) == main || git fetch --depth=1 origin main:main 
+          # Report metrics
+          echo "## Metrics" >> report.md
+          git fetch --prune
+          dvc metrics diff main --show-md >> report.md
+          # Publish confusion matrix diff
+          #echo "## Plots" >> report.md
+          #echo "### Class confusions" >> report.md
+          dvc plots diff --target classes.csv --template confusion -x actual -y predicted --show-vega main > vega.json
+          vl2png vega.json -s 1.5 > confusion_plot.png
+          echo "![](./confusion_plot.png)" >> report.md
           cml comment create report.md
         env:
           REPO_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
