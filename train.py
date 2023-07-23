@@ -1,31 +1,80 @@
-from sklearn.neural_network import MLPClassifier
-from sklearn.metrics import recall_score, precision_score
+
 import json
-import numpy as np
 import pandas as pd
+import numpy as np
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, roc_auc_score
+from sklearn.compose import ColumnTransformer
+from sklearn.pipeline import Pipeline
+from sklearn.impute import SimpleImputer
+from sklearn.preprocessing import StandardScaler, OneHotEncoder
+from sklearn.metrics import ConfusionMatrixDisplay
+import matplotlib.pyplot as plt
+
 
 # Read in data
-X_train = np.genfromtxt("data/train_features.csv")
-y_train = np.genfromtxt("data/train_labels.csv")
-X_test = np.genfromtxt("data/test_features.csv")
-y_test = np.genfromtxt("data/test_labels.csv")
+X_train = pd.read_csv('data/train_features.csv')
+y_train = pd.read_csv('data/train_labels.csv')
+X_test = pd.read_csv('data/test_features.csv')
+y_test = pd.read_csv('data/test_labels.csv')
 
+
+numeric_features = [
+        'Age', 
+        'DurationOfPitch', 
+        'MonthlyIncome'
+    ]
+numeric_transformer = Pipeline(
+        steps = [
+            ('imputer', SimpleImputer(strategy = 'median')), 
+            ("scaler", StandardScaler())
+        ]
+    )
+categorical_features = ['TypeofContact', 'Occupation', 'Gender', 'ProductPitched', 'MaritalStatus', 'Designation']
+
+categorical_transformer = Pipeline(
+        steps = [
+            ('imputer', SimpleImputer(strategy = 'most_frequent')),
+            ('encoder', OneHotEncoder(handle_unknown = 'ignore'))
+        ]
+    )
+
+preprocessor = ColumnTransformer(transformers = [
+            ('num_tr', numeric_transformer, numeric_features),
+            ('cat_tr', categorical_transformer, categorical_features)
+        ], remainder = SimpleImputer(strategy = 'most_frequent')
+    )
 # Fit a model
+n_estimators =  20
 
-clf = MLPClassifier(random_state=0, max_iter=30)
-clf.fit(X_train, y_train)
+min_samples_split =  2
 
-# Get overall accuracy
-acc = clf.score(X_test, y_test)
+min_samples_leaf  =  2
 
-# Get precision and recall
-y_score = clf.predict(X_test)
-prec = precision_score(y_test, y_score)
-rec = recall_score(y_test, y_score)
+rf_model = RandomForestClassifier( n_estimators = n_estimators, min_samples_split = min_samples_split, 
+                                   min_samples_leaf = min_samples_leaf, class_weight = None)
+pipe_rf = Pipeline(steps = [
+            ('preprocessor', preprocessor), ('classifier', rf_model)
+        ])
+pipe_rf.fit(X_train, y_train)
 
-# Get the loss
-loss = clf.loss_curve_
-pd.DataFrame(loss, columns=["loss"]).to_csv("loss.csv", index=False)
+y_pred =  pipe_rf.predict(X_test)
+acc = accuracy_score(y_test, y_pred)
+prec = precision_score(y_test, y_pred)
+rec = recall_score(y_test, y_pred)
+f1 = f1_score(y_test, y_pred)
+print('Accuracy: %.3f' % acc)
+print('Precision: %.3f' % prec)
+print('Recall: %.3f' % rec )
+print('F1 Score: %.3f' % f1)
 
-with open("metrics.json", 'w') as outfile:
-    json.dump({"accuracy": acc, "precision": prec, "recall": rec}, outfile)
+with open('metrics.json', 'w') as outfile:
+    json.dump({'accuracy': acc, 'precision': prec, 'recall': rec, 'f1_score': f1}, outfile)
+
+# Plot it
+disp = ConfusionMatrixDisplay.from_estimator(
+    pipe_rf, X_test, y_test, normalize = 'true', cmap = plt.cm.Blues
+)
+
+pd.DataFrame({'actual':y_test.squeeze(), 'predicted':y_pred.squeeze()}).to_csv('classes.csv', index=False)
+plt.savefig('plot.png')

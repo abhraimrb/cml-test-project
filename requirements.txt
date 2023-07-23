@@ -1,3 +1,4 @@
-scikit-learn
+setuptools
 pandas
+scikit-learn
 matplotlib
